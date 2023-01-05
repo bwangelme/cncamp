@@ -48,5 +48,5 @@ func main() {
 	r.GET("/healthz", Healthz)
 	r.GET("/", Home)
 
-	r.Run("localhost:8080")
+	r.Run("0.0.0.0:8080")
 }
