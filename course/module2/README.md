@@ -88,3 +88,9 @@ SYMBOL TABLE:
 0000000000402140 l     F .text  000000000000022d cmpbody
 ...
 ```
+
+## Goroutine
+
+![Goroutine 运行图](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-06-091640.png)
+
+![Goroutine 状态转换图](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-06-091956.png)
