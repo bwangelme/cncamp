@@ -94,3 +94,6 @@ SYMBOL TABLE:
 ![Goroutine 运行图](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-06-091640.png)
 
 ![Goroutine 状态转换图](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-06-091956.png)
+
+## 内存管理
+
