@@ -132,3 +132,195 @@ root@dockervbox:~/overlayfs# cat merged/in_upper.txt
 from upper
 root@dockervbox:~/overlayfs#
 ```
+
+## Docker 架构
+
+![](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-12-082246.png)
+
+docker 的架构如上图所示，containerd 通过 shim 启动了容器子进程之后，它不直接管理，shim 进程是 systemd-init 的子进程，所以 containerd 自身更加轻量，没有子进程也易于重启。
+
+![](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-12-082557.png)
+
+## docker 使用 none 网络模式从 0 构建网络的实验
+
+```shell
+# 查看当前主机上的网桥设备，默认有一个 docker0
+root@dockervbox:~# brctl show
+bridge name     bridge id               STP enabled     interfaces
+docker0         8000.02421f335f1f       no
+
+# 创建 /var/run/netns 目录，ip netns list 查看的就是此目录中的网络 namespace
+root@dockervbox:~# mkdir -p /var/run/netns
+
+# 删除所有的网络 ns
+root@dockervbox:~# find -L /var/run/netns -type l -delete
+
+# 使用 none 网络模式启动一个 nginx 容器
+root@dockervbox:~# docker run --network=none -d nginx
+Unable to find image 'nginx:latest' locally
+latest: Pulling from library/nginx
+8740c948ffd4: Pull complete
+d2c0556a17c5: Pull complete
+c8b9881f2c6a: Pull complete
+693c3ffa8f43: Pull complete
+8316c5e80e6d: Pull complete
+b2fe3577faa4: Pull complete
+Digest: sha256:b8f2383a95879e1ae064940d9a200f67a6c79e710ed82ac42263397367e7cc4e
+Status: Downloaded newer image for nginx:latest
+305efb91b1ba38d2ebb9b64c499fb84bcde9ff6b1f26eadebd08fbe6fc8898b6
+
+root@dockervbox:~# docker ps
+CONTAINER ID   IMAGE     COMMAND                  CREATED          STATUS          PORTS     NAMES
+305efb91b1ba   nginx     "/docker-entrypoint.…"   13 seconds ago   Up 12 seconds             nervous_herschel
+
+# 启动成功后，记录此容器的 pid 到 pid环境变量
+root@dockervbox:~# docker inspect 305efb91b1ba -i pid
+unknown shorthand flag: 'i' in -i
+See 'docker inspect --help'.
+root@dockervbox:~# docker inspect 305efb91b1ba | grep -i pid
+            "Pid": 4955,
+            "PidMode": "",
+            "PidsLimit": null,
+root@dockervbox:~# export pid=4955
+root@dockervbox:~# echo $pid
+4955
+
+# 进入 $pid 进程所在的网络 ns, 查看所有的网络设备，可以看到只有一个 lo 设备，没有其他的网络设备
+root@dockervbox:~# nsenter -t $pid -n ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+       
+# 软链接 $pid 的网络 ns 到 /var/run/netns/ 中, 创建 ip netns 可以操作的网络 ns
+root@dockervbox:~# ln -s "/proc/$pid/ns/net" /var/run/netns/$pid
+root@dockervbox:~# ls /var/run/netns/4955
+/var/run/netns/4955
+root@dockervbox:~# ip netns list
+4955
+
+# 创建一对 veth 设备，两端设备分别叫做 A 和 B
+root@dockervbox:~# ip link add A type veth peer name B
+# 将 A 连接到 docker0 网桥设备上
+root@dockervbox:~# brctl addif docker0 A
+# 将 A 启动
+root@dockervbox:~# ip link set A up
+# 在主机网络 ns 中查看所有的设备，可以看到 A@B 已经启动了
+root@dockervbox:~# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 02:b7:1d:9c:e0:75 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 brd 10.0.2.255 scope global dynamic enp0s3
+       valid_lft 82712sec preferred_lft 82712sec
+    inet6 fe80::b7:1dff:fe9c:e075/64 scope link
+       valid_lft forever preferred_lft forever
+3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN group default
+    link/ether 02:42:1f:33:5f:1f brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+4: B@A: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
+    link/ether a6:a1:28:a0:94:bf brd ff:ff:ff:ff:ff:ff
+    
+# 看起来没有完全启动成功，还有一个 M-DOWN 的状态
+5: A@B: <NO-CARRIER,BROADCAST,MULTICAST,UP,M-DOWN> mtu 1500 qdisc noqueue master docker0 state LOWERLAYERDOWN group default qlen 1000
+    link/ether 16:05:7b:c1:c3:86 brd ff:ff:ff:ff:ff:ff
+# 将容器的目标 ip, 子网掩码，网关保存到环境变量中
+root@dockervbox:~# SETIP=172.17.0.10
+root@dockervbox:~# SETMASK=16
+root@dockervbox:~# GATEWAY=172.17.0.1
+
+# 将 veth B 放到 $pid 网络 ns 中
+root@dockervbox:~# ip link set B netns $pid
+
+# 将 veth B 在 $pid ns 中的名字改成 eth0
+root@dockervbox:~# ip netns exec $pid ip link set dev B name eth0
+
+# 启动 $pid ns 中的 eth0
+root@dockervbox:~# ip netns exec $pid ip link set eth0 up
+
+# 查看 $pid ns 中的所有进程，此时可以看到 eth0 已经启动了
+# 因为 A 已经 连接到了网桥上，所以直接启动成功，出现了 LOWER_UP 的状态
+root@dockervbox:~# ip netns exec $pid ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+4: eth0@if5: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether a6:a1:28:a0:94:bf brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    
+# 设置 $pid ns 中的 eth0 设备的 ip 和 掩码
+root@dockervbox:~# ip netns exec $pid ip addr add $SETIP/$SETMASK dev eth0
+# 设置 $pid ns 中的 eth0 设备的默认路由网关
+root@dockervbox:~# ip netns exec $pid ip route add default via $GATEWAY
+# 此时访问 nginx 容器的 ip, 发现已经能够访问通了
+root@dockervbox:~# curl $SETIP
+<!DOCTYPE html>
+<html>
+<head>
+<title>Welcome to nginx!</title>
+<style>
+html { color-scheme: light dark; }
+body { width: 35em; margin: 0 auto;
+font-family: Tahoma, Verdana, Arial, sans-serif; }
+</style>
+</head>
+<body>
+<h1>Welcome to nginx!</h1>
+<p>If you see this page, the nginx web server is successfully installed and
+working. Further configuration is required.</p>
+
+<p>For online documentation and support please refer to
+<a href="http://nginx.org/">nginx.org</a>.<br/>
+Commercial support is available at
+<a href="http://nginx.com/">nginx.com</a>.</p>
+
+<p><em>Thank you for using nginx.</em></p>
+</body>
+</html>
+
+# 查看 $pid ns 中的所有设备，可以看到 eth0 已经启动成功，并且有了 ip 和子网掩码
+root@dockervbox:~# nsenter -t $pid -n ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+4: eth0@if5: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether a6:a1:28:a0:94:bf brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.17.0.10/16 scope global eth0
+       valid_lft forever preferred_lft forever
+       
+# 查看 $pid ns 中的路由表, 可以看到 eth0 设备的默认路由地址是 
+root@dockervbox:~# nsenter -t $pid -n ip r 172.17.0.1
+default via 172.17.0.1 dev eth0
+172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.10
+
+# 查看宿主机上的网络设备，可以看到 veth A 的名字变成了 A@if4, 并且状态已经由 M-DOWN 变成了 LOWER_UP
+root@dockervbox:~# ip a
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 02:b7:1d:9c:e0:75 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.15/24 brd 10.0.2.255 scope global dynamic enp0s3
+       valid_lft 81989sec preferred_lft 81989sec
+    inet6 fe80::b7:1dff:fe9c:e075/64 scope link
+       valid_lft forever preferred_lft forever
+3: docker0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default
+    link/ether 02:42:1f:33:5f:1f brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 brd 172.17.255.255 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:1fff:fe33:5f1f/64 scope link
+       valid_lft forever preferred_lft forever
+5: A@if4: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP group default qlen 1000
+    link/ether 16:05:7b:c1:c3:86 brd ff:ff:ff:ff:ff:ff link-netns 4955
+    inet6 fe80::1405:7bff:fec1:c386/64 scope link
+       valid_lft forever preferred_lft forever
+```
