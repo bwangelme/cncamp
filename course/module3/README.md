@@ -88,3 +88,47 @@ root@lazyubuntu:~# nsenter -t 13380 -n ip a
 - 红黑树的特点:
   - 自平衡，树上没有一条路径会比其他的路径长两倍
   - O(log n) 的时间复杂度，能够在树上快速高效地插入或删除进程
+
+## Overlayfs 实验
+
+```shell
+root@dockervbox:~# mkdir overlayfs
+root@dockervbox:~# cd overlayfs/
+# 创建四个目录，lower,upper 的文件将要被 merge 到 merged 目录中，work 是 overlayfs 的工作目录
+root@dockervbox:~/overlayfs# mkdir upper lower merged work
+root@dockervbox:~/overlayfs# echo "from lower" > lower/in_lower.txt
+root@dockervbox:~/overlayfs# echo "from upper" > upper/in_upper.txt
+root@dockervbox:~/overlayfs# echo "from lower" > lower/in_both.txt
+root@dockervbox:~/overlayfs# echo "from upper" > upper/in_both.txt
+root@dockervbox:~/overlayfs# tree .
+.
+├── lower
+│   ├── in_both.txt
+│   └── in_lower.txt
+├── merged
+├── upper
+│   ├── in_both.txt
+│   └── in_upper.txt
+└── work
+
+4 directories, 4 files
+# 这条命令将一个 overlayfs 挂载到 merged 目录中
+root@dockervbox:~/overlayfs# mount -t overlay overlay -o lowerdir=`pwd`/lower,upperdir=`pwd`/upper,workdir=`pwd`/work `pwd`/merged
+root@dockervbox:~/overlayfs# mount | grep -i overlay
+overlay on /root/overlayfs/merged type overlay (rw,relatime,lowerdir=/root/overlayfs/lower,upperdir=/root/overlayfs/upper,workdir=/root/overlayfs/work,xino=off)
+root@dockervbox:~/overlayfs# tree merged/
+merged/
+├── in_both.txt
+├── in_lower.txt
+└── in_upper.txt
+
+0 directories, 3 files
+# 可以看到，upper 和 lower 目录的文件被合并到了 merged 目录中，文件名相同的文件，使用的是 upper 目录的文件
+root@dockervbox:~/overlayfs# cat merged/in_both.txt
+from upper
+root@dockervbox:~/overlayfs# cat merged/in_lower.txt
+from lower
+root@dockervbox:~/overlayfs# cat merged/in_upper.txt
+from upper
+root@dockervbox:~/overlayfs#
+```
