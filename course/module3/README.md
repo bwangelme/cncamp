@@ -324,3 +324,36 @@ root@dockervbox:~# ip a
     inet6 fe80::1405:7bff:fec1:c386/64 scope link
        valid_lft forever preferred_lft forever
 ```
+
+## 单机 Docker 网络的默认模式，网桥 + NAT
+
+![](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-12-092852.png)
+
+容器通过 veth 对的方式连接到网桥 docker0 上，docker0 再通过 NAT 的方式连接到宿主机的 eth0 设备上，从 eth0 开始访问外部网络
+
+## 跨主机容器互联互通
+
+### Underlay 网络模式
+
+![](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-12-093320.png)
+
+- 容器还是通过 veth 设备连接到网桥上
+- 网桥直接拥有了主机网卡设备，它拥有了主机网卡的 ip, 网桥直接能够和其他宿主机通信，容器网络设备和网桥在同一个 ip 段，这样容器就直接能够和其他宿主机通信了。
+
+- 优点：方案简单
+- 缺点：需要自己规划 IP 分配
+
+### Overlay 网络模式
+
+#### VXLAN
+
+![](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-12-094348.png)
+
+- Host-A 和 Host-B 是虚拟机，IP-A 和 IP-B 是虚拟机之间通信的 IP
+- 第一步: Host-A 发送一个包给 Host-B
+- VXLAN 发送包的时候，会经过一个 VTEP 设备
+  - VTEP 设备知道 IP-A 和 IP-B 所在的宿主机的 IP
+  - 第二步: VTEP 设备在包的前面加了一个包头，它封了一个 UDP 的包头，加了 VXLAN 的 ID 和宿主机的 IP
+  - 第三步: 路由设备根据 VXLAN UDP 包头中的宿主机 IP 和 MAC 地址，将包发送到了 Host-B 所在的宿主机上
+  - 第四步: 包在进入 Host-B 之前，会经过 VTEP 设备，VTEP 设备将 VXLAN UDP 包头去掉，只留下了原始的包信息
+  - 第五步: Host-B 检查收到的包，发现包头中的目的 IP 正是自己，于是接受此包
