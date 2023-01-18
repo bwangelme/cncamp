@@ -357,3 +357,8 @@ root@dockervbox:~# ip a
   - 第三步: 路由设备根据 VXLAN UDP 包头中的宿主机 IP 和 MAC 地址，将包发送到了 Host-B 所在的宿主机上
   - 第四步: 包在进入 Host-B 之前，会经过 VTEP 设备，VTEP 设备将 VXLAN UDP 包头去掉，只留下了原始的包信息
   - 第五步: Host-B 检查收到的包，发现包头中的目的 IP 正是自己，于是接受此包
+
+## Dockerfile 实践
+
+1. `RUN apt-get update && apt-get install` update 和 install 应该永远连在一起，否则的话，`apt-get update` 可能被缓存，这样 apt-get install 就无法安装最新的包了
+2. `EXPOSE <port>` 当执行 `docker run -P` 的时候，docker 会自动将 expose 的端口，映射到主机大端口, 例如 `0.0.0.0:32768->80/tcp`
