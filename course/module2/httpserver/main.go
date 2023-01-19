@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	_ "runtime/pprof"
 )
 
 func main() {
