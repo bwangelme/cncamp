@@ -174,9 +174,6 @@ CONTAINER ID   IMAGE     COMMAND                  CREATED          STATUS       
 305efb91b1ba   nginx     "/docker-entrypoint.…"   13 seconds ago   Up 12 seconds             nervous_herschel
 
 # 启动成功后，记录此容器的 pid 到 pid环境变量
-root@dockervbox:~# docker inspect 305efb91b1ba -i pid
-unknown shorthand flag: 'i' in -i
-See 'docker inspect --help'.
 root@dockervbox:~# docker inspect 305efb91b1ba | grep -i pid
             "Pid": 4955,
             "PidMode": "",
@@ -295,7 +292,7 @@ root@dockervbox:~# nsenter -t $pid -n ip a
        valid_lft forever preferred_lft forever
        
 # 查看 $pid ns 中的路由表, 可以看到 eth0 设备的默认路由地址是 
-root@dockervbox:~# nsenter -t $pid -n ip r 172.17.0.1
+root@dockervbox:~# nsenter -t $pid -n ip route
 default via 172.17.0.1 dev eth0
 172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.10
 

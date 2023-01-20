@@ -15,7 +15,7 @@ k -n kube-system exec -it etcd-k8s-node1 -- etcdctl --cert /etc/kubernetes/pki/e
 
 控制器操作 Deployment 的流程图
 
-![](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-19-120404.png)
+![](https://passage-1253400711.cos.ap-beijing.myqcloud.com/2023-01-19-121502.png)
 
 ```shell
 # 查看 pod 的事件，可以看到第一件是将 pod assigned 到 k8s-node3 这件事是 default-scheduler 做的 
