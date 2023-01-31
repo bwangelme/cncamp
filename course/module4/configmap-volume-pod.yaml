@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-volume-pod
+spec:
+  containers:
+    - name: test-container
+      image: k8s.gcr.io/busybox
+      command: [ "/bin/sh", "-c", "ls /etc/config/" ]
+      volumeMounts:
+      - name: config-volume
+        mountPath: /etc/config
+  volumes:
+    - name: config-volume
+      configMap:
+        # Provide the name of the ConfigMap containing the files you want
+        # to add to the container
+        name: special-config
+  restartPolicy: Never
+
+# 查看 pod 的日志，可以看到 ls 的输出
+
+# ø> k get pod                                                                                                                                                                                                           22:42:53 (01-31)
+# NAME                   READY   STATUS      RESTARTS   AGE
+# configmap-volume-pod   0/1     Completed   0          5s
+
+# ø> k logs configmap-volume-pod                                                                                                                                                                                         22:42:58 (01-31)
+# special.how
+# special.type

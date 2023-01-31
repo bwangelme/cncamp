@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: centos
+  labels:
+    run: centos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: centos
+  template:
+    metadata:
+      labels:
+        run: centos
+    spec:
+      containers:
+        - name: centos
+          image: centos
+          command:
+            - tail
+            - -f
+            - /dev/null
+          readinessProbe:
+            exec:
+              command:
+                - cat
+                - /tmp/healthy
+            initialDelaySeconds: 5 # liveness probe 开始检查前等待的时间
+            periodSeconds: 5  # probe 检查的时间间隔
