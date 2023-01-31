@@ -14,3 +14,4 @@ spec:
   selector:
     app: nginx
 
+# 在节点上，可以通过 svc 的 cluster-ip 直接访问 nginx pod
