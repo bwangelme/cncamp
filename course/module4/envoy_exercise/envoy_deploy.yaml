@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: qae
+  name: envoy-deploy
+  labels:
+    app: envoy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: envoy
+  template:
+    metadata:
+      labels:
+        app: envoy
+    spec:
+      containers:
+        - name: envoy
+          command:
+            - envoy
+            - -c
+            - /etc/envoy/envoy_default.yaml
+          image: envoyproxy/envoy:v1.23.1
+          volumeMounts:
+            - mountPath: "/etc/envoy"
+              name: envoy-config
+      volumes:
+        - name: envoy-config
+          configMap:
+            name: envoy-config
