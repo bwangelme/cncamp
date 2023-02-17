@@ -1,0 +1,1 @@
+pgrep -f 'etcd --name infra' | xargs kill -TERM
