@@ -36,7 +36,7 @@ helm install my-etcd bitnami/etcd --set global.storageClass=manual --set persist
 
 ### 测试
 
-- 启动 etcd 集群并登陆进去
+- 启动 etcd client pod 并登陆进去
 
 ```shell
 kubectl run my-etcd-client --restart='Never' --image docker.io/bitnami/etcd:3.5.7-debian-11-r10 --env ROOT_PASSWORD=$(kubectl get secret --namespace qae my-etcd -o jsonpath="{.data.etcd-root-password}" | base64 -d) --env ETCDCTL_ENDPOINTS="my-etcd.qae.svc.cluster.local:2379" --namespace qae --command -- sleep infinity
