@@ -1,3 +1,5 @@
+# 每个 pv 和一个宿主机上的磁盘绑定，所以每个节点都需要为其创建一个 pv
+
 apiVersion: v1
 kind: PersistentVolume
 metadata:
