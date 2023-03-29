@@ -1,3 +1,11 @@
+## 说明
+
+文件名|作用
+---|---
+envoy-configmap.yaml|envoy 配置文件的 configmap, 最终会被挂载进 pod 中
+envoy_deploy.yaml| envoy deployment 的配置文件
+envoy_svc.yaml | envoy service 的配置
+
 ## 测试
 
 - 在 k8s 节点上，通过 svc ip 可以访问 envoy 容器
